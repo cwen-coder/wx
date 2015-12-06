@@ -1,138 +1,46 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/xml"
+	//"github.com/go-martini/martini"
 	"fmt"
-	"github.com/go-martini/martini"
-	"io"
-	"io/ioutil"
+	"github.com/wizjin/weixin"
 	"log"
 	"net/http"
-	"sort"
-	"strings"
-	"time"
 )
 
 const (
-	token = "wxcwenyin"
+	token     = "wxcwenyin"
+	appID     = "wx1abd680617d17f5f"
+	appSecret = "7aa1af925a4483b126be488502c5e7db"
 )
 
-type TextRequestBody struct {
-	XMLName      xml.Name `xml:"xml"`
-	ToUserName   string
-	FromUserName string
-	CreateTime   time.Duration
-	MsgType      string
-	Content      string
-	MsgId        int
+func Echo(w weixin.ResponseWriter, r *weixin.Request) {
+	txt := r.Content // 获取用户发送的消息
+	w.ReplyText(txt) // 回复一条文本消息
+	//w.PostText("Post:" + txt) // 发送一条文本消息
+	ShortURL(w)
 }
 
-type TextResponseBody struct {
-	XMLName      xml.Name `xml:"xml"`
-	ToUserName   CDATAText
-	FromUserName CDATAText
-	CreateTime   time.Duration
-	MsgType      CDATAText
-	Content      CDATAText
-}
-
-/*
-	type CDATAText struct {
-			Text []byte `xml:",innerxml"`
-		}
-*/
-
-type CDATAText struct {
-	Text string `xml:",innerxml"`
-}
-
-func makeSignature(timestamp, nonce string) string {
-	sl := []string{token, timestamp, nonce}
-	sort.Strings(sl)
-	s := sha1.New()
-	io.WriteString(s, strings.Join(sl, ""))
-	return fmt.Sprintf("%x", s.Sum(nil))
-}
-
-func validateUrl(w http.ResponseWriter, r *http.Request) bool {
-	timestamp := strings.Join(r.Form["timestamp"], "")
-	nonce := strings.Join(r.Form["nonce"], "")
-	signatureGen := makeSignature(timestamp, nonce)
-
-	signatureIn := strings.Join(r.Form["signature"], "")
-	if signatureGen != signatureIn {
-		return false
-	}
-	echostr := strings.Join(r.Form["echostr"], "")
-	fmt.Fprintf(w, echostr)
-	return true
-}
-
-func parseTextRequestBody(r *http.Request) *TextRequestBody {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Fatal(err)
-		return nil
-	}
-	fmt.Println(string(body))
-	requestBody := &TextRequestBody{}
-	xml.Unmarshal(body, requestBody)
-	return requestBody
-}
-
-func value2CDATA(v string) CDATAText {
-	//return CDATAText{[]byte("<![CDATA[" + v + "]]>")}
-	return CDATAText{"<![CDATA[" + v + "]]>"}
-}
-
-func makeTextResponseBody(fromUserName, toUserName, content string) ([]byte, error) {
-	textResponseBody := &TextResponseBody{}
-	textResponseBody.FromUserName = value2CDATA(fromUserName)
-	textResponseBody.ToUserName = value2CDATA(toUserName)
-	textResponseBody.MsgType = value2CDATA("text")
-	textResponseBody.Content = value2CDATA(content)
-	textResponseBody.CreateTime = time.Duration(time.Now().Unix())
-	return xml.MarshalIndent(textResponseBody, " ", "  ")
-}
-
-func procRequest(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	if !validateUrl(w, r) {
-		log.Println("Wechat Service: this http request is not from Wechat platform!")
-		return
-	}
-
-	if r.Method == "POST" {
-		textRequestBody := parseTextRequestBody(r)
-		if textRequestBody != nil {
-			fmt.Printf("Wechat Service: Recv text msg [%s] from user [%s]!",
-				textRequestBody.Content,
-				textRequestBody.FromUserName)
-			responseTextBody, err := makeTextResponseBody(textRequestBody.ToUserName,
-				textRequestBody.FromUserName,
-				"Hello, "+textRequestBody.FromUserName)
-			if err != nil {
-				log.Println("Wechat Service: makeTextResponseBody error: ", err)
-				return
-			}
-			w.Header().Set("Content-Type", "text/xml")
-			fmt.Println(string(responseTextBody))
-			fmt.Fprintf(w, string(responseTextBody))
-		}
-	}
+// 关注事件的处理函数
+func Subscribe(w weixin.ResponseWriter, r *weixin.Request) {
+	w.ReplyText("欢迎关注") // 有新人关注，返回欢迎消息
 }
 
 func main() {
 	log.Println("Wechat Service: Start!")
-	m := martini.Classic()
-	m.Any("/", procRequest)
+	mux := weixin.New(token, appID, appSecret)
+	//m := martini.Classic()
+	mux.HandleFunc(weixin.MsgTypeText, Echo)
+	// 注册关注事件的处理函数
+	mux.HandleFunc(weixin.MsgTypeEventSubscribe, Subscribe)
+	http.Handle("/", mux) // 注册接收微信服务器数据的接口URI
 	//http.HandleFunc("/", procRequest)
 	//err := http.ListenAndServe(":3001", nil)
-	m.RunOnAddr(":3001")
+	//m.RunOnAddr(":3001")
 	// if err != nil {
 	// 	log.Fatal("Wechat Service: ListenAndServe failed, ", err)
 	// }
+	http.ListenAndServe(":3001", nil) // 启动接收微信数据服务器
 	log.Println("Wechat Service: Stop!")
-	m.Run()
+	//m.Run()
 }
