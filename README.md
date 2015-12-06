@@ -1,2 +1,2 @@
 # wx  
-golang 尝试 微信开发测试
+golang 微信接开发尝试
