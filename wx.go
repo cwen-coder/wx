@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/xml"
 	"fmt"
+	"github.com/go-martini/martini"
 	"io"
 	"io/ioutil"
 	"log"
@@ -124,10 +125,14 @@ func procRequest(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	log.Println("Wechat Service: Start!")
-	http.HandleFunc("/", procRequest)
-	err := http.ListenAndServe(":3001", nil)
-	if err != nil {
-		log.Fatal("Wechat Service: ListenAndServe failed, ", err)
-	}
+	m := martini.Classic()
+	m.Any("/", procRequest)
+	//http.HandleFunc("/", procRequest)
+	//err := http.ListenAndServe(":3001", nil)
+	m.RunOnAddr(":3001")
+	// if err != nil {
+	// 	log.Fatal("Wechat Service: ListenAndServe failed, ", err)
+	// }
 	log.Println("Wechat Service: Stop!")
+	m.Run()
 }
